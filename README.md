@@ -17,7 +17,7 @@ It's been tested so far on a 64-bit Linux 3.4 distro (Amazon Linux on EC2).
 Prerequisites:
 - some modern Linux
 - root access
-- gcc
+- basic compiler toolchain (gcc, make, etc.)
 
 Disclaimer: I am not a security expert, so use at your own risk. In particular, the setup
 I describe does not do a chroot. Although `safeexec` can technically chroot, I haven't figured
@@ -29,23 +29,26 @@ This doc highlights how I'm executing untrusted Python code in a double sandbox 
 
 ## Setup
 
-Dec 2013 - I first installed Apache with CGI support on an EC2 instance running Amazon Linux, roughly following
+Dec 2013 - I first installed the Apache Webserver with CGI support on an EC2 instance running Amazon Linux,
+roughly following
 [these instructions](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-LAMP.html) (without MySQL):
 
-Install Apache:
+    # install Apache with CGI
+    sudo yum update
     sudo yum groupinstall -y "Web Server" "PHP Support"
 
-Start Apache:
+    # start Apache
     sudo service httpd start
 
-configure permissions:
+    # configure permissions for a www group
     sudo groupadd www
     sudo usermod -a -G www ec2-user
-    <log out and log back in>
+    <log out of EC2 and then log back in>
     sudo chown -R root:www /var/www
     sudo chmod 2775 /var/www
     find /var/www -type d -exec sudo chmod 2775 {} +
     find /var/www -type f -exec sudo chmod 0664 {} +
+
 
 I also compiled Python 3.3.3 from source and did `sudo make install` since I need to run Python 3.
 The Python 3 executable is in `/usr/local/bin/python3`.
@@ -84,3 +87,64 @@ I modified this version by adding an explicit `--uid` option, which lets me exec
 a child process as a specified UID. This was required for me to get Python subprocesses
 to play nicely with Apache CGI. (The default `safeexec` behavior is to execute a child
 process with UID = PID, to ensure that all child processes are unique. [Read here](safeexec/README)).
+
+To make `safeexec` available to Apache CGI, I compiled it, copied the binary to `/var/www/cgi-bin`,
+and set the proper ownership and permission bits:
+
+    cd safeexec/
+    make
+    # hopefully it succeeds
+    cp safeexec /var/www/cgi-bin/
+    cd /var/www/cgi-bin/
+    # set these magic bits, or else the sandbox won't work!
+    sudo chown root:root safeexec
+	sudo chmod u+s safeexec
+
+
+### Blocking network access
+
+By default, `safeexec` executes child processes with a group ID (gid) of 1000.
+Run this magic `iptables` incantation to block all network access for gid=1000,
+which will prevent sandboxed programs from accessing the network:
+
+    sudo /sbin/iptables -A OUTPUT -m owner --gid-owner 1000 -j DROP
+
+
+### Testing the sandbox locally
+
+First `cd /var/www/cgi-bin`, since we will be working with files in there.
+
+Here is how to invoke the sandbox with Python:
+
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "print('hello world')"
+
+Let's break this down:
+- `--cpu 6 --clock 4` limits the child process to 6 CPU seconds and 4 wall clock seconds, respectively.
+- `--mem 250000` limits to ~250MB of memory. If you set this number too low (e.g., below 30000), then Python won't have enough memory to start up.
+- `--uid 99` sets the UID to the `nobody` user. On my EC2 instance, `nobody` has a UID of 99. Check `/etc/passwd` for yours. This is important to both prevent the child process from tampering with your files, and also to get Python subprocesses working. If you *don't* explicitly set the UID, then `safeexec` will pick a "random" fake UID for improved isolation, and Python will sometimes fail to initialize, since its process UID isn't a real user. (This was an aggravating bug to hunt down, ergh!!!)
+- `--exec /usr/local/bin/python3 -c "print('hello world')"` executes a Python string
+
+If all goes well, the program should successfully run and terminate with the following output:
+
+    hello world
+    OK
+    elapsed time: 0 seconds
+    memory usage: 0 kbytes
+    cpu usage: 0.036 seconds
+    
+Okay, let's try to run an infinite loop:
+
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "while True: print('argh')"
+
+It should die after 4 seconds with a `Time Limit Exceeded` error. Cool!
+
+Now let's try a memory bomb (note that I set `--mem` to a smaller value):
+
+    ./safeexec --mem 50000 --uid 99 --exec /usr/local/bin/python3 -c '
+    x = 2
+    while True:
+        x = x * x
+    '
+
+
+### Testing the sandbox on the Web via CGI
