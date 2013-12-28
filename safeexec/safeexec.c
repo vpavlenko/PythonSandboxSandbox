@@ -52,6 +52,7 @@ struct config
 
   gid_t gid;
   int uidplus;
+  int customuid; /* pgbovine */
   uid_t theuid;
 
   char *report_file;
@@ -63,7 +64,7 @@ struct config
 
 struct config profile = { 10, 32768, 0, 8192, 0, 0, 60,
 			  512, 16, 
-			  1000, 10000, 0,
+			  1000, 10000, 0, 0,
 			  NULL, NULL, NULL, NULL };
 
 struct config *pdefault = &profile;
@@ -253,6 +254,9 @@ void validate (void) {
     error ("Wall clock time must be smaller than %u", LARGECONST);
   if (profile.uidplus >= LARGECONST)
     error ("uidplus must be smaller than %u", LARGECONST);
+  /* pgbovine */
+  if (profile.customuid >= LARGECONST)
+    error ("uid must be smaller than %u", LARGECONST);
   if (profile.nfile > 1024)
     error ("File number limit must be no larger than %u", 1024);
   if (profile.niceness < 10 || profile.niceness > 19)
@@ -292,6 +296,8 @@ char **parse (char **p)
 	  input1 = (unsigned int *) &profile.memory;
 	else if (strcmp (*p, "--uidplus") == 0)
 	  input1 = (unsigned int *) &profile.uidplus;
+	else if (strcmp (*p, "--uid") == 0) /* pgbovine */
+	  input1 = (unsigned int *) &profile.customuid;
 	else if (strcmp (*p, "--core") == 0)
 	  input1 = (unsigned int *) &profile.core;
 	else if (strcmp (*p, "--nproc") == 0)
@@ -372,8 +378,10 @@ void printusage (char **p)
   fprintf (stderr, "\nusage: %s <options> --exec <command>\n", *p);
   fprintf (stderr, "\t\t**ATTENTION: read the security precautions in README**\n");
   fprintf (stderr, "Available options:\n");
-  fprintf (stderr, "\t--uidplus      <number>        default: %u\n",
+  fprintf (stderr, "\t--uidplus      <number>        Add to auto-generated UID (default: %u)\n",
 	   pdefault->uidplus);
+  /* pgbovine */
+  fprintf (stderr, "\t--uid          <number>        Try to run as UID (overrides --uidplus)\n");
   fprintf (stderr, "\t--gid          <group id>      Default: %d\n",
 	   ((int) pdefault->gid));
   fprintf (stderr, "\t--cpu          <seconds>       Default: %lu second(s)\n",
@@ -457,7 +465,13 @@ int main (int argc, char **argv, char **envp)
       error ("Couldn't open redirection file\n");
   }
       
-  profile.theuid = profile.uidplus + getpid();
+  /* pgbovine */
+  if (profile.customuid) {
+    profile.theuid = profile.customuid;
+  }
+  else {
+    profile.theuid = profile.uidplus + getpid();
+  }
 
   pid = fork ();
   if (pid < 0)
