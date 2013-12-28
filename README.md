@@ -98,7 +98,7 @@ and set the proper ownership and permission bits:
     cd /var/www/cgi-bin/
     # set these magic bits, or else the sandbox won't work!
     sudo chown root:root safeexec
-	sudo chmod u+s safeexec
+    sudo chmod u+s safeexec
 
 
 ### Blocking network access
@@ -132,19 +132,42 @@ If all goes well, the program should successfully run and terminate with the fol
     memory usage: 0 kbytes
     cpu usage: 0.036 seconds
     
-Okay, let's try to run an infinite loop:
+Okay, let's try to run an **infinite loop**:
 
     ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "while True: print('argh')"
 
 It should die after 4 seconds with a `Time Limit Exceeded` error. Cool!
 
-Now let's try a memory bomb (note that I set `--mem` to a smaller value):
+Now let's try a **memory bomb** (note that I set `--mem` to a smaller value):
 
     ./safeexec --mem 50000 --uid 99 --exec /usr/local/bin/python3 -c '
     x = 2
     while True:
         x = x * x
     '
+
+It should die with a `MemoryError` within a second or so. Cool^2!
+
+Now let's try to **create a file**:
+
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "f=open('blah.txt','w');f.write('hi');f.close()"
+
+It should fail with a `PermissionError`. Note that if you run without the sandbox, it should work:
+
+    /usr/local/bin/python3 -c "f=open('blah.txt','w');f.write('hi');f.close()"
+
+Okay, keep that `blah.txt` file there and re-run the sandboxed command to try to **overwrite an existing file**:
+
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "f=open('blah.txt','w');f.write('hi');f.close()"
+
+Should get permission denied again.
+
+What about **reading a file**, like `/etc/passwd`?
+
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "print(open('/etc/passwd','r').read())"
+
+Ah, interesting -- we can still read most world-readable files as the `nobody` user, so that's a slight problem.
+But we will fix this with our second sandbox layer later :)
 
 
 ### Testing the sandbox on the Web via CGI
