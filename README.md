@@ -380,3 +380,8 @@ print(out)
 print('stderr:')
 print(err)
 ```
+
+That's all, folks! Happy sandboxing!!!
+
+[Pyrrhic victory](http://en.wikipedia.org/wiki/Pyrrhic_victory)!
+![Pyrrhic victory](pyrrhic-victory-twitter.png)
