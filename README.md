@@ -386,3 +386,9 @@ That's all, folks ... happy sandboxing!
 [Pyrrhic victory](http://en.wikipedia.org/wiki/Pyrrhic_victory)!
 
 ![Pyrrhic victory](pyrrhic-victory-twitter.png)
+
+
+## Limitations
+
+- no chroot yet (2painful2setup)
+- all sandboxed child processes run as the "nobody" user, so they can technically spy on one another or send signals to one another; but this isn't really a problem in practice since i don't expect any individual process to run for more than a second or so.
