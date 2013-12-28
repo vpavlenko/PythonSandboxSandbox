@@ -138,7 +138,7 @@ Okay, let's try to run an **infinite loop**:
 
 It should die after 4 seconds with a `Time Limit Exceeded` error. Cool!
 
-Now let's try a **memory bomb** (note that I set `--mem` to a smaller value):
+Now let's try a **memory bomb** (note that I set `--mem` to a smaller value so it will die sooner):
 
     ./safeexec --mem 50000 --uid 99 --exec /usr/local/bin/python3 -c '
     x = 2
@@ -168,6 +168,23 @@ What about **reading a file**, like `/etc/passwd`?
 
 Ah, interesting -- we can still read most world-readable files as the `nobody` user, so that's a slight problem.
 But we will fix this with our second sandbox layer later :)
+
+What about **changing the permissions** on a file or directory? If this is allowed, then an attacker can
+force a Denial-of-Service by making your website files inaccessible to the public. Eeek!
+
+Let's assume that `blah.txt` still exists. First let's set its permission to 0 (without sandboxing) and verify that it worked:
+    
+    ls -l blah.txt # should see regular permissions, e.g.,: -rw-rw-r-- 1 ec2-user www 2 Dec 28 16:18 blah.txt
+    /usr/local/bin/python3 -c "import os; os.chmod('blah.txt', 0)"
+    ls -l blah.txt # should see NO permissions,      e.g.,: ---------- 1 ec2-user www 2 Dec 28 16:18 blah.txt
+    chmod 664 blah.txt # restore to normal
+    ls -l blah.txt # should see regular permissions, e.g.,: -rw-rw-r-- 1 ec2-user www 2 Dec 28 16:18 blah.txt
+
+Okay, now let's try to change permissions from a sandboxed process:
+
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "import os; os.chmod('blah.txt', 0)"
+
+This should result in a `PermissionError`.
 
 
 ### Testing the sandbox on the Web via CGI
