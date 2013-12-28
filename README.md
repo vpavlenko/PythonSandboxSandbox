@@ -6,6 +6,7 @@ A sandbox-within-a-sandbox for Python #inception
 Created in Dec 2013 by Philip Guo (philip@pgbovine.net)
 
 This sandbox is suitable for running untrusted Python code over the Web. It enforces:
+
 - limited CPU and wall clock time
 - limited memory usage
 - no file opening, reading, or writing
@@ -19,15 +20,14 @@ It's been tested so far on a 64-bit Linux 3.4 distro (Amazon Linux on EC2).
 Prerequisites:
 - some modern Linux
 - root access
-- basic compiler toolchain (gcc, make, etc.)
+- basic GNU compiler toolchain (gcc, make, etc.)
 
-Disclaimer: I am not a security expert, so use at your own risk. In particular, the setup
-I describe does not do a chroot. Although `safeexec` can technically chroot, I haven't figured
-out all the magical incantations required to get it working with my Python installation.
+Disclaimer: I am not a security expert, so use at your own risk.
 
 ---
 
-This doc highlights how I'm executing untrusted Python code in a double sandbox on Amazon EC2 with Apache CGI.
+This doc highlights how I am executing untrusted Python code in a double sandbox on Amazon EC2 with Apache CGI.
+
 
 ## Setup
 
@@ -381,7 +381,8 @@ print('stderr:')
 print(err)
 ```
 
-That's all, folks! Happy sandboxing!!!
+That's all, folks ... happy sandboxing!
 
 [Pyrrhic victory](http://en.wikipedia.org/wiki/Pyrrhic_victory)!
+
 ![Pyrrhic victory](pyrrhic-victory-twitter.png)
