@@ -136,7 +136,7 @@ If all goes well, the program should successfully run and terminate with the fol
 
 #### Limiting running time
 
-Okay, let's try to run an **infinite loop**:
+Let's try to run an infinite loop:
 
     ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "while True: print('argh')"
 
@@ -145,7 +145,7 @@ It should die after 4 seconds with a `Time Limit Exceeded` error. Cool!
 
 #### Limiting memory
 
-Now let's try a **memory bomb** (note that I set `--mem` to a smaller value so it will die sooner):
+Now let's try a memory bomb (note that I set `--mem` to a smaller value so it will die sooner):
 
     ./safeexec --mem 50000 --uid 99 --exec /usr/local/bin/python3 -c '
     x = 2
@@ -158,26 +158,29 @@ It should die with a `MemoryError` within a second or so. Cool^2!
 
 #### Creating, reading, and writing files
 
-Now let's try to **create a file**:
+Now let's try to create and write to a file:
 
-    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "f=open('blah.txt','w');f.write('hi');f.close()"
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c \
+    "f=open('blah.txt','w');f.write('hi');f.close()"
 
 It should fail with a `PermissionError`. Note that if you run without the sandbox, it should work:
 
     /usr/local/bin/python3 -c "f=open('blah.txt','w');f.write('hi');f.close()"
 
-Okay, keep that `blah.txt` file there and re-run the sandboxed command to try to **overwrite an existing file**:
+Okay, keep that `blah.txt` file there and re-run the sandboxed command to try to overwrite an existing file:
 
-    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "f=open('blah.txt','w');f.write('hi');f.close()"
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c \
+    "f=open('blah.txt','w');f.write('hi');f.close()"
 
 Should get permission denied again.
 
-What about **reading a file**, like `/etc/passwd`?
+What about reading a file, like `/etc/passwd`?
 
-    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "print(open('/etc/passwd','r').read())"
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c \
+    "print(open('/etc/passwd','r').read())"
 
-Ah, interesting -- we can still read most world-readable files as the `nobody` user, so that's a slight problem.
-But we will fix this with our second sandbox layer later :)
+Ah, interesting -- we can still read most world-readable files as the `nobody` user, so that's a problem.
+But we will fix this later with our second sandbox layer :)
 
 
 #### Changing file permissions
@@ -195,7 +198,8 @@ Let's assume that `blah.txt` still exists. First let's set its permission to 0 (
 
 Okay, now let's try to change permissions from a sandboxed process:
 
-    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "import os; os.chmod('blah.txt', 0)"
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c \
+    "import os; os.chmod('blah.txt', 0)"
 
 This should result in a `PermissionError`.
 
@@ -204,20 +208,23 @@ This should result in a `PermissionError`.
 
 Let's first try running a simple Python script that fetches the contents of the Python home page:
 
-    /usr/local/bin/python3 -c "import urllib.request; print(urllib.request.urlopen('http://python.org/').read())"
+    /usr/local/bin/python3 -c \
+    "import urllib.request; print(urllib.request.urlopen('http://python.org/').read())"
     
 This should print out some HTML fetched over the network.
 
 Let's run it in the sandbox:
 
-    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "import urllib.request; print(urllib.request.urlopen('http://python.org/').read())"
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c \
+    "import urllib.request; print(urllib.request.urlopen('http://python.org/').read())"
 
 You should now see an error, since `iptables` blocked network accesses for gid=1000, which the child process was running as.
 
 To confirm, run `safeexec` again with `--gid 2000` (or anything besides the default of 1000), and it
 should be able to access the network:
 
-    ./safeexec --gid 2000 --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c "import urllib.request; print(urllib.request.urlopen('http://python.org/').read())"
+    ./safeexec --gid 2000 --cpu 6 --clock 4 --mem 250000 --uid 99 --exec /usr/local/bin/python3 -c \
+    "import urllib.request; print(urllib.request.urlopen('http://python.org/').read())"
 
 
 ### Testing the sandbox on the Web via CGI
