@@ -11,6 +11,7 @@ This sandbox is suitable for running untrusted Python code over the Web. It enfo
 - no file opening, reading, or writing
 - no file permission changes
 - no network access
+- no spawning subprocesses
 
 
 It's been tested so far on a 64-bit Linux 3.4 distro (Amazon Linux on EC2).
@@ -227,6 +228,21 @@ should be able to access the network:
     "import urllib.request; print(urllib.request.urlopen('http://python.org/').read())"
 
 
+#### Spawning subprocesses
+
+Finally, let's make sure that the child process cannot spawn any subprocesses of its own. To test, let's
+just create a simple shell script `test.sh` that invokes `ls`:
+
+    #!/bin/sh
+    ls
+
+Let's run it in the sandbox:
+
+    ./safeexec --gid 2000 --cpu 6 --clock 4 --mem 250000 --uid 99 --exec ./test.sh
+
+It should fail with an error when trying to work. Woohoo!
+
+
 ### Testing the sandbox on the Web via CGI
 
 Now let's write a CGI script that allows the user to input arbitrary Python code and have it execute
@@ -283,12 +299,17 @@ Okay, cool, now we're done with the first sandbox layer. But we must go deeper .
 
 ## Sandbox 2: Pure-Python sandbox
 
-The main pesky part about the existing `safeexec` sandbox is that the child process can still open
-and **read** lots of files. `safeexec` provides two mechanisms to prevent file reading -- chroot
-and limiting open file descriptors to zero -- but both are problematic for my use case. First, chroot
-is really awkward and cumbersome, and leads to sysadmin headaches. Second, I can't simply limit open
-file descriptors to zero, since Python itself needs to read a lot of files when it starts up.
+The main limitation of the existing `safeexec` sandbox is that the child process can still open
+and **read** lots of files.
+
+`safeexec` provides two mechanisms to prevent file reading -- chroot and limiting
+open file descriptors to zero -- but both are problematic for my use case. First, chroot
+is really cumbersome and leads to sysadmin nightmares because I need to copy a whole bunch
+of libraries into the chroot jail, ergh! Second, I can't simply limit open file descriptors to zero,
+since Python itself needs to read a lot of files when it initializes.
 
 So I've implemented a second layer of sandboxing, this one specialized for Python scripts. See
 [`simple_pysandbox.py`](simple_pysandbox.py) for its code.
 
+In sum, this sandbox:
+- 
