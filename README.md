@@ -67,7 +67,7 @@ After installation, I was able to get this "hello world" Python 3 CGI script run
 
 by visiting this URL:
 
-    http://<EC2 URL>/cgi-bin/hello.py
+    http://<EC2 instance URL>/cgi-bin/hello.py
 
 Okay, so far so good. Now at least I can run Python code sent over the Web. Of course, there's no sandbox yet,
 so if I execute malicious code, then my entire VM can get trashed.
@@ -228,3 +228,67 @@ should be able to access the network:
 
 
 ### Testing the sandbox on the Web via CGI
+
+Now let's write a CGI script that allows the user to input arbitrary Python code and have it execute
+within this sandbox. For now, let's 
+
+```
+#!/usr/local/bin/python3
+import cgi
+import os
+import subprocess
+
+# for debugging
+import cgitb
+cgitb.enable()
+
+print("Content-type: text/plain; charset=iso-8859-1\n") # proper header
+
+form = cgi.FieldStorage()
+script = form['user_script'].value
+
+args = ['./safeexec',
+        '--cpu', '6',
+        '--clock', '4',
+        '--mem', '250000',
+        '--uid', '99', # essential or else Python won't start up properly!!!
+        '--exec']
+
+args += ['/usr/local/bin/python3', '-c', script]
+
+p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+out, err = p.communicate()
+
+print('stdout:')
+print(out)
+print('stderr:')
+print(err)
+```
+
+Save this file as `/var/www/cgi-bin/run_code.py`, make it executable, and visit:
+
+    http://<EC2 instance URL>/cgi-bin/run_code.py?user_script=print("hello CGI!")
+
+You should see something like:
+
+```
+stdout:
+b'hello CGI!\n'
+stderr:
+b'OK\nelapsed time: 0 seconds\nmemory usage: 0 kbytes\ncpu usage: 0.024 seconds\n'
+```
+
+Okay, cool, now we're done with the first sandbox layer. But we must go deeper ...
+
+
+## Sandbox 2: Pure-Python sandbox
+
+The main pesky part about the existing `safeexec` sandbox is that the child process can still open
+and **read** lots of files. `safeexec` provides two mechanisms to prevent file reading -- chroot
+and limiting open file descriptors to zero -- but both are problematic for my use case. First, chroot
+is really awkward and cumbersome, and leads to sysadmin headaches. Second, I can't simply limit open
+file descriptors to zero, since Python itself needs to read a lot of files when it starts up.
+
+So I've implemented a second layer of sandboxing, this one specialized for Python scripts. See
+[`simple_pysandbox.py`](simple_pysandbox.py) for its code.
+
