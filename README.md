@@ -312,4 +312,71 @@ So I've implemented a second layer of sandboxing, this one specialized for Pytho
 [`simple_pysandbox.py`](simple_pysandbox.py) for its code.
 
 In sum, this sandbox:
-- 
+- restricts imported Python modules to a whitelist
+- prevents the executed script from opening any files, which effectively prevents importing of additional Python modules that are NOT in the whitelist, since those usually involve file accesses (notable exceptions are builtin modules such as `posix`, which are compiled into the CPython binary, eeek!)
+- restricts memory usage to ~200MB and CPU time to 5 seconds, which are slightly tighter bounds than `safeexec`
+
+To use it, copy and set permissions bits:
+
+    cp simple_pysandbox.py /var/www/cgi-bin
+    chmod a+x simple_pysandbox.py
+    
+Now try to run a script:
+
+    ./simple_pysandbox.py "import os; print(os.getuid())"
+
+It won't let you import `os`, since that involves opening files :) However, note that it *will* still let you
+import builtin modules such as `posix`, which are compiled into the CPython binary and hence don't require
+opening additional files:
+
+    $ ./simple_pysandbox.py "import posix; print(posix.getuid())"
+    {"code": "import posix; print(posix.getuid())", "user_stderr": "", "user_stdout": "222\n"}
+
+The output is a JSON string containing the original code you executed, and the captured `stdout` and `stderr`
+strings. Note here that my UID was 222.
+
+
+### Combining the sandboxes
+
+Now let's run both sandboxes together:
+
+    ./safeexec --cpu 6 --clock 4 --mem 250000 --uid 99 --exec ./simple_pysandbox.py \
+    "import urllib.request; print(urllib.request.urlopen('http://python.org/').read())"
+
+Defense in depth!!! Note that the script can't even import `urllib` in the first place since it can
+no longer open files, but even if it could, it would still be barred from accessing the network.
+
+Finally, to get the CGI script to work, modify `run_code.py` to invoke `simple_pysandbox.py` instead of `python3`:
+
+```
+#!/usr/local/bin/python3
+import cgi
+import os
+import subprocess
+
+# for debugging
+import cgitb
+cgitb.enable()
+
+print("Content-type: text/plain; charset=iso-8859-1\n") # proper header
+
+form = cgi.FieldStorage()
+script = form['user_script'].value
+
+args = ['./safeexec',
+        '--cpu', '6',
+        '--clock', '4',
+        '--mem', '250000',
+        '--uid', '99', # essential or else Python won't start up properly!!!
+        '--exec']
+
+args += ['./simple_pysandbox.py', script]
+
+p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+out, err = p.communicate()
+
+print('stdout:')
+print(out)
+print('stderr:')
+print(err)
+```
